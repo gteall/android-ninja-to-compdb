@@ -1,0 +1,9 @@
+Checks: "bugprone-*,\
+google-*,\
+misc-*,\
+modernize-*,\
+performance-*,\
+readability-*,\
+portability-*,\
+-modernize-use-trailing-return-type,\
+-bugprone-easily-swappable-parameters"
