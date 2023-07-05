@@ -1,26 +1,48 @@
 #include <dirent.h>
+#include <sys/signal.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <mutex>
 #include <regex>
 #include <string>
+#include <thread>
 #include <vector>
-#include <array>
 
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::string;
 using std::ifstream;
-using std::ofstream;
 using std::ios;
+using std::ofstream;
+using std::string;
 
 static constexpr int PATH_LEN = 256;
 static constexpr int JSON_UNIT_SIZE = 256 * 1024;
-static const string COMPDB_FILE_NAME_NAME{"compile_commands.json"};
+static const string COMPDB_FILE_NAME{"compile_commands.json"};
+
+// static ofstream s_stream_out;
+namespace
+{
+ofstream s_stream_out;
+// std::mutex s_mutex;
+}  // namespace
+
+extern "C" void sigint_handler(int sig)
+{
+    cout << "receive signal " << sig << endl;
+    if (s_stream_out.is_open())
+    {
+        s_stream_out << endl << "]" << endl;
+        exit(0);
+    }
+}
 
 string generate_json_unit(const string &dir, const string &cmd, const string &opts)
 {
@@ -29,11 +51,11 @@ string generate_json_unit(const string &dir, const string &cmd, const string &op
 
     ret.reserve(JSON_UNIT_SIZE);
 
-    //dir
+    // dir
     ret.append("  {\n");
     ret.append(R"(    "directory": ")").append(dir).append("\",\n");
 
-    //cmd
+    // cmd
     std::vector<string> strs;
     std::regex ws_re("\\s+");  // 空白符
 
@@ -89,7 +111,7 @@ string generate_json_unit(const string &dir, const string &cmd, const string &op
     }
     ret.append("\",\n");
 
-    //file
+    // file
     ret.append(R"(    "file": ")").append(strs.back()).append("\"\n");
     ret.append("  }");
 
@@ -113,9 +135,15 @@ int main(int argc, char *argv[])
     string dir{cur_path.data()};
     // cout << cur_path << endl;
 
-    string COMPDB_FILE_NAME{"compile_commands.json"};
-    ofstream stream_out(COMPDB_FILE_NAME);
-    if (!stream_out.is_open())
+    // string COMPDB_FILE_NAME{"compile_commands.json"};
+    // ofstream stream_out(COMPDB_FILE_NAME);
+    // if (!stream_out.is_open())
+    // {
+    //     cerr << "open file " << COMPDB_FILE_NAME << " failed!" << endl;
+    //     return -1;
+    // }
+    s_stream_out.open(COMPDB_FILE_NAME);
+    if (!s_stream_out.is_open())
     {
         cerr << "open file " << COMPDB_FILE_NAME << " failed!" << endl;
         return -1;
@@ -129,13 +157,16 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    stream_out << "[" << endl;
+    s_stream_out << "[" << endl;
+
+    signal(SIGINT, sigint_handler);
 
     string cur_line;
     while (getline(stream_in, cur_line))
     {
         std::smatch result;
-        std::regex pattern("^ command = /bin/bash -c \"PWD=/proc/self/cwd.* "
+        std::regex pattern(
+            "^ command = /bin/bash -c \"PWD=/proc/self/cwd.* "
             "(\\S*/bin/(clang|clang\\+\\+)) (.*\\.(cpp|c))\"$");
         if (std::regex_match(cur_line, result, pattern))
         {
@@ -151,14 +182,16 @@ int main(int argc, char *argv[])
             }
             else
             {
-                stream_out << "," << endl;  // 非首个cmd给上个cmd的}后增加一个,分隔符
+                s_stream_out << "," << endl;  // 非首个cmd给上个cmd的}后增加一个,分隔符
             }
 
-            stream_out << generate_json_unit(dir, result[1], result[3]);
+            s_stream_out << generate_json_unit(dir, result[1], result[3]);
+
+            // debug
+            //  std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     }
 
-    stream_out << endl << "]" << endl;
+    s_stream_out << endl << "]" << endl;
     return 0;
 }
-

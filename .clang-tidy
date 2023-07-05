@@ -6,4 +6,5 @@ performance-*,\
 readability-*,\
 portability-*,\
 -modernize-use-trailing-return-type,\
--bugprone-easily-swappable-parameters"
+-bugprone-easily-swappable-parameters,\
+-bugprone-signal-handler"
