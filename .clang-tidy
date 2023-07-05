@@ -7,4 +7,5 @@ readability-*,\
 portability-*,\
 -modernize-use-trailing-return-type,\
 -bugprone-easily-swappable-parameters,\
--bugprone-signal-handler"
+-bugprone-signal-handler,\
+-readability-identifier-length"

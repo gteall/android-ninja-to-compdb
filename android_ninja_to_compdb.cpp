@@ -1,6 +1,7 @@
 #include <dirent.h>
 #include <sys/signal.h>
 #include <unistd.h>
+#include <termios.h>    // struct termios, tcgetattr(), tcsetattr()
 
 #include <algorithm>
 #include <array>
@@ -9,7 +10,6 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <mutex>
 #include <regex>
 #include <string>
 #include <thread>
@@ -27,20 +27,33 @@ static constexpr int PATH_LEN = 256;
 static constexpr int JSON_UNIT_SIZE = 256 * 1024;
 static const string COMPDB_FILE_NAME{"compile_commands.json"};
 
-// static ofstream s_stream_out;
 namespace
 {
 ofstream s_stream_out;
-// std::mutex s_mutex;
 }  // namespace
 
-extern "C" void sigint_handler(int sig)
+// extern "C" void sigint_handler(int sig)
+// {
+//     cout << "receive signal " << sig << endl;
+//     if (s_stream_out.is_open())
+//     {
+//         s_stream_out << endl << "]" << endl;
+//         exit(0);
+//     }
+// }
+
+void set_key_mode()
 {
-    cout << "receive signal " << sig << endl;
-    if (s_stream_out.is_open())
+    struct termios attr;
+
+    // Set terminal to single character mode.
+    tcgetattr(fileno(stdin), &attr);
+    attr.c_lflag &= (~ICANON & ~ECHO);
+    attr.c_cc[VTIME] = 0;
+    attr.c_cc[VMIN] = 1;
+    if (tcsetattr(fileno(stdin), TCSANOW, &attr) < 0)
     {
-        s_stream_out << endl << "]" << endl;
-        exit(0);
+        cerr << "Unable to set terminal to single character mode" << endl;
     }
 }
 
@@ -121,6 +134,7 @@ string generate_json_unit(const string &dir, const string &cmd, const string &op
 
 int main(int argc, char *argv[])
 {
+    bool running_flag = true;
     bool first_cmd_flag = true;
     int cnt = 0;
 
@@ -157,12 +171,30 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    //按q键中断ninja文件解析
+    std::thread key_handler{[&running_flag](){
+        // Read single characters from cin.
+        set_key_mode();
+        std::streambuf *pbuf = std::cin.rdbuf();
+        cout << "Enter q or Q to quit " << endl;
+        while (running_flag) {
+            char c;
+            c = static_cast<char>(pbuf->sbumpc());
+            if (c == 'q' || c == 'Q') {
+                cout << "quit!" << endl;
+                running_flag = false;
+            } 
+            else {
+                cout << "Enter q or Q to quit " << endl;
+            }
+        }
+    }};
+    key_handler.detach();
+
     s_stream_out << "[" << endl;
 
-    signal(SIGINT, sigint_handler);
-
     string cur_line;
-    while (getline(stream_in, cur_line))
+    while (running_flag && getline(stream_in, cur_line))
     {
         std::smatch result;
         std::regex pattern(
@@ -188,7 +220,7 @@ int main(int argc, char *argv[])
             s_stream_out << generate_json_unit(dir, result[1], result[3]);
 
             // debug
-            //  std::this_thread::sleep_for(std::chrono::seconds(2));
+            // std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     }
 
