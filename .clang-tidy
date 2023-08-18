@@ -1,11 +1,11 @@
-Checks: "bugprone-*,\
-google-*,\
-misc-*,\
-modernize-*,\
-performance-*,\
-readability-*,\
-portability-*,\
--modernize-use-trailing-return-type,\
--bugprone-easily-swappable-parameters,\
--bugprone-signal-handler,\
--readability-identifier-length"
+#Checks: "bugprone-*,\
+#google-*"
+# misc-*,\
+# modernize-*,\
+# performance-*,\
+# readability-*,\
+# portability-*"
+# -modernize-use-trailing-return-type,\
+# -bugprone-easily-swappable-parameters,\
+# -bugprone-signal-handler,\
+# -readability-identifier-length"

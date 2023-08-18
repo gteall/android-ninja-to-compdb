@@ -2,6 +2,7 @@
 #include <sys/signal.h>
 #include <unistd.h>
 #include <termios.h>    // struct termios, tcgetattr(), tcsetattr()
+#include <sys/stat.h>
 
 #include <algorithm>
 #include <array>
@@ -14,9 +15,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "cmd_out.hpp"
 
-using std::cerr;
-using std::cout;
 using std::endl;
 using std::ifstream;
 using std::ios;
@@ -32,15 +32,6 @@ namespace
 ofstream s_stream_out;
 }  // namespace
 
-// extern "C" void sigint_handler(int sig)
-// {
-//     cout << "receive signal " << sig << endl;
-//     if (s_stream_out.is_open())
-//     {
-//         s_stream_out << endl << "]" << endl;
-//         exit(0);
-//     }
-// }
 
 void set_key_mode()
 {
@@ -53,7 +44,7 @@ void set_key_mode()
     attr.c_cc[VMIN] = 1;
     if (tcsetattr(fileno(stdin), TCSANOW, &attr) < 0)
     {
-        cerr << "Unable to set terminal to single character mode" << endl;
+        gtea::CmdOut::print("Unable to set terminal to single character mode");
     }
 }
 
@@ -128,7 +119,18 @@ string generate_json_unit(const string &dir, const string &cmd, const string &op
     ret.append(R"(    "file": ")").append(strs.back()).append("\"\n");
     ret.append("  }");
 
-    cout << ++s_cnt << " ===> " << strs.back() << endl;
+    // gtea::CmdOut::print("%d ===> %s", ++s_cnt, strs.back().c_str());
+    return ret;
+}
+
+uint32_t get_file_size(const std::string &file)
+{
+    uint32_t ret = 0;
+    struct stat file_stat;
+    if(0 == stat(file.c_str(), &file_stat))
+    {
+        ret = file_stat.st_size;
+    }
     return ret;
 }
 
@@ -140,7 +142,7 @@ int main(int argc, char *argv[])
 
     if (argc < 2)
     {
-        cerr << "params error" << endl;
+        gtea::CmdOut::print("params error!");
         return -1;
     }
 
@@ -159,7 +161,7 @@ int main(int argc, char *argv[])
     s_stream_out.open(COMPDB_FILE_NAME);
     if (!s_stream_out.is_open())
     {
-        cerr << "open file " << COMPDB_FILE_NAME << " failed!" << endl;
+        gtea::CmdOut::print("open file %s failed!", COMPDB_FILE_NAME.c_str());
         return -1;
     }
 
@@ -167,7 +169,7 @@ int main(int argc, char *argv[])
     ifstream stream_in(ninja_file, ios::in);
     if (!stream_in.is_open())
     {
-        cerr << "open file " << ninja_file << " failed!" << endl;
+        gtea::CmdOut::print("open file %s failed!", ninja_file.c_str());
         return -1;
     }
 
@@ -176,26 +178,36 @@ int main(int argc, char *argv[])
         // Read single characters from cin.
         set_key_mode();
         std::streambuf *pbuf = std::cin.rdbuf();
-        cout << "Enter q or Q to quit " << endl;
+        // cout << "Enter q or Q to quit " << endl;
+        gtea::CmdOut::print("Enter q or Q to quit!");
         while (running_flag) {
             char c;
             c = static_cast<char>(pbuf->sbumpc());
             if (c == 'q' || c == 'Q') {
-                cout << "quit!" << endl;
+                gtea::CmdOut::print("quit!");
                 running_flag = false;
             } 
-            else {
-                cout << "Enter q or Q to quit " << endl;
-            }
         }
     }};
     key_handler.detach();
 
     s_stream_out << "[" << endl;
 
+    int file_size = get_file_size(ninja_file);
+    gtea::CmdOut::ProgressBarInfo bar_info;
+    bar_info.total = file_size;
+    gtea::CmdOut::createProgressBar(bar_info);
+    // gtea::ProgressBar bar{"", file_size};
+    int cur_size = 0;
+
     string cur_line;
     while (running_flag && getline(stream_in, cur_line))
     {
+        cur_size += cur_line.size() + 1;
+        gtea::CmdOut::updateProgressBar(cur_size);
+        // bar.update(cur_size);
+        // std::cout << file_size << " : " << cur_size << std::endl;
+
         std::smatch result;
         std::regex pattern(
             "^ command = /bin/bash -c \"PWD=/proc/self/cwd.* "

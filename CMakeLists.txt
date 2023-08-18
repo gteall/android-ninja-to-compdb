@@ -6,4 +6,4 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set (CMAKE_CXX_STANDARD 14)
 
-add_executable(an-compdb  android_ninja_to_compdb.cpp)
+add_executable(an-compdb  android_ninja_to_compdb.cpp cmd_out.cpp)
